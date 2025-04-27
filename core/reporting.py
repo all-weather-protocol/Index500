@@ -3,6 +3,12 @@ Reporting module for the indexfund package.
 Contains functions for reporting results and generating performance plots.
 """
 
+# Import from json module
+import json
+
+# Import from numpy module
+import numpy as np
+
 # Import from metrics module
 from core.metrics import calculate_benchmark_performance
 
@@ -122,3 +128,38 @@ def generate_performance_plots(all_performance_data, start_date=None):
     metrics_only_filename = f"pics/metrics_only_{base_filename}.png"
     print(f"Generating metrics-only comparison plot: {metrics_only_filename}")
     plot_metrics_only(all_performance_data, output_file=metrics_only_filename)
+
+
+def dump_performance_data_to_json(
+    all_performance_data, output_file="performance_data.json"
+):
+    """
+    Dump performance data to a JSON file for frontend visualization.
+
+    Args:
+        all_performance_data (dict): Dictionary containing performance data for each strategy
+        output_file (str): Path to the output JSON file
+    """
+
+    # Convert numpy types to Python native types for JSON serialization
+    def convert_numpy_types(obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy_types(item) for item in obj]
+        return obj
+
+    # Convert the data
+    json_data = convert_numpy_types(all_performance_data)
+
+    # Write to file
+    with open(output_file, "w") as f:
+        json.dump(json_data, f, indent=2)
+
+    print(f"Performance data dumped to: {output_file}")

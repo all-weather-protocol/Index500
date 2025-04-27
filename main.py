@@ -18,6 +18,7 @@ from core.data_loading import load_and_prepare_data
 
 # Import from reporting module
 from core.reporting import (
+    dump_performance_data_to_json,
     generate_performance_plots,
     print_benchmark_metrics,
     print_strategy_metrics,
@@ -166,6 +167,8 @@ def run_performance_analysis(
     # Generate plots if requested
     if generate_plots:
         generate_performance_plots(all_performance_data, start_date)
+        # Dump performance data to JSON for frontend visualization
+        dump_performance_data_to_json(all_performance_data)
 
     # Display final portfolio weights
     display_portfolio_weights(historical_data, methods, "final")
