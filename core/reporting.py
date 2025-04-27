@@ -114,11 +114,11 @@ def generate_performance_plots(all_performance_data, start_date=None):
         base_filename = f"{base_filename}_{start_date_str.replace('-', '')}"
 
     # Generate performance-only plot without risk metrics
-    performance_only_filename = f"performance_only_{base_filename}.png"
+    performance_only_filename = f"pics/performance_only_{base_filename}.png"
     print(f"Generating performance-only plot: {performance_only_filename}")
     plot_performance_only(all_performance_data, output_file=performance_only_filename)
 
     # Generate metrics-only plot without performance chart
-    metrics_only_filename = f"metrics_only_{base_filename}.png"
+    metrics_only_filename = f"pics/metrics_only_{base_filename}.png"
     print(f"Generating metrics-only comparison plot: {metrics_only_filename}")
     plot_metrics_only(all_performance_data, output_file=metrics_only_filename)

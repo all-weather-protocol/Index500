@@ -6,7 +6,8 @@
     "scripts": {
         "test": "pytest --cov=contrib --cov-fail-under=10 --cov-report=term-missing tests",
         "commit": "git-cz",
-        "check": "lint-staged"
+        "check": "lint-staged",
+        "format": "black ."
     },
     "husky": {
         "hooks": {
