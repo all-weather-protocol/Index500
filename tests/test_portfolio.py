@@ -198,11 +198,11 @@ def test_calculate_staking_rewards():
     """Test calculating staking rewards with simple interest (no compounding)."""
     # 10,000 tokens at 10% APR for 365 days should give exactly 1000 rewards (simple interest)
     rewards = calculate_staking_rewards(10000, 0.10, 365)
-    assert rewards == pytest.approx(1051.557816162325, rel=1e-2)
+    assert rewards == 1051.557816162325
 
     # 1,000 tokens at 5% APR for 30 days = 1000 * (0.05/365) * 30 = 4.11 tokens
     rewards = calculate_staking_rewards(1000, 0.05, 30)
-    assert rewards == pytest.approx(4.11, rel=1e-2)
+    assert rewards == 4.117762369655553
 
 
 @patch(
@@ -230,22 +230,21 @@ def test_apply_staking_to_portfolio(sample_portfolio):
 
     # BTC should have earned ~0.5 * 0.05 * (30/365) = ~0.002 BTC
     assert sample_portfolio["tokens"]["btc"]["quantity"] > initial_btc
-    assert sample_portfolio["tokens"]["btc"]["quantity"] == pytest.approx(
-        initial_btc + calculate_staking_rewards(initial_btc, 0.05, 30), rel=1e-5
-    )
+    assert sample_portfolio["tokens"]["btc"][
+        "quantity"
+    ] == initial_btc + calculate_staking_rewards(initial_btc, 0.05, 30)
 
     # ETH should have earned ~5.0 * 0.10 * (30/365) = ~0.041 ETH
     assert sample_portfolio["tokens"]["eth"]["quantity"] > initial_eth
-    assert sample_portfolio["tokens"]["eth"]["quantity"] == pytest.approx(
-        initial_eth + calculate_staking_rewards(initial_eth, 0.10, 30), rel=1e-5
-    )
+    assert sample_portfolio["tokens"]["eth"][
+        "quantity"
+    ] == initial_eth + calculate_staking_rewards(initial_eth, 0.10, 30)
 
     # Stablecoin should have earned ~20000 * 0.03 * (30/365) = ~49.32 USD
     assert sample_portfolio["stablecoin"]["quantity"] > initial_stablecoin
-    assert sample_portfolio["stablecoin"]["quantity"] == pytest.approx(
-        initial_stablecoin + calculate_staking_rewards(initial_stablecoin, 0.03, 30),
-        rel=1e-5,
-    )
+    assert sample_portfolio["stablecoin"][
+        "quantity"
+    ] == initial_stablecoin + calculate_staking_rewards(initial_stablecoin, 0.03, 30)
 
 
 def test_should_rebalance():
@@ -302,27 +301,61 @@ def test_rebalance_portfolio_tokens(sample_portfolio, sample_token_prices):
     }
 
     timestamp = 1609459200000
+    swap_fee_rate = 0.01  # 1% fee
+
+    # Calculate expected values
+    current_volatile_value = 20000  # Current volatile value
+    total_fee = 0.0
+
+    # Calculate fees per token
+    btc_current = sample_portfolio["tokens"]["btc"]["usd_value"]  # 15000
+    btc_target = current_volatile_value * 0.7  # 14000
+    btc_swap = abs(btc_target - btc_current)  # 1000
+    btc_fee = btc_swap * swap_fee_rate  # 10
+    total_fee += btc_fee
+    current_volatile_value -= btc_fee  # 19990
+
+    eth_current = sample_portfolio["tokens"]["eth"]["usd_value"]  # 4000
+    eth_target = current_volatile_value * 0.2  # 3998
+    eth_swap = abs(eth_target - eth_current)  # 2
+    eth_fee = eth_swap * swap_fee_rate  # 0.02
+    total_fee += eth_fee
+    current_volatile_value -= eth_fee  # 19989.98
+
+    sol_current = sample_portfolio["tokens"]["sol"]["usd_value"]  # 1000
+    sol_target = current_volatile_value * 0.1  # 1998.998
+    sol_swap = abs(sol_target - sol_current)  # 998.998
+    sol_fee = sol_swap * swap_fee_rate  # 9.98998
+    total_fee += sol_fee
+    current_volatile_value -= sol_fee  # 19980
 
     # Capture stdout to check the output
     with patch("sys.stdout", new=io.StringIO()):
         rebalanced = rebalance_portfolio_tokens(
-            sample_portfolio, new_weights, sample_token_prices, timestamp
+            sample_portfolio, new_weights, sample_token_prices, timestamp, swap_fee_rate
         )
 
     # Check new target weights were set
-    assert rebalanced["tokens"]["btc"]["target_weight"] == 0.7
-    assert rebalanced["tokens"]["eth"]["target_weight"] == 0.2
-    assert rebalanced["tokens"]["sol"]["target_weight"] == 0.1
+    assert rebalanced[0]["tokens"]["btc"]["target_weight"] == 0.7
+    assert rebalanced[0]["tokens"]["eth"]["target_weight"] == 0.2
+    assert rebalanced[0]["tokens"]["sol"]["target_weight"] == 0.1
 
-    # Check new quantities
-    # BTC: (20000 * 0.7) / 30000 = 0.4667
-    assert rebalanced["tokens"]["btc"]["quantity"] == pytest.approx(0.4667, rel=1e-4)
+    # Check new quantities (after fee)
+    assert (
+        rebalanced[0]["tokens"]["btc"]["quantity"]
+        == (btc_target - btc_fee) / sample_token_prices["btc"]
+    )
+    assert (
+        rebalanced[0]["tokens"]["eth"]["quantity"]
+        == (eth_target - eth_fee) / sample_token_prices["eth"]
+    )
+    assert (
+        rebalanced[0]["tokens"]["sol"]["quantity"]
+        == (sol_target - sol_fee) / sample_token_prices["sol"]
+    )
 
-    # ETH: (20000 * 0.2) / 800 = 5.0
-    assert rebalanced["tokens"]["eth"]["quantity"] == pytest.approx(5.0, rel=1e-4)
-
-    # SOL: (20000 * 0.1) / 10 = 200.0
-    assert rebalanced["tokens"]["sol"]["quantity"] == pytest.approx(200.0, rel=1e-4)
+    # Check total fees paid
+    assert rebalanced[1] == total_fee
 
 
 def test_rebalance_stablecoin_allocation(sample_portfolio, sample_token_prices):
@@ -330,27 +363,42 @@ def test_rebalance_stablecoin_allocation(sample_portfolio, sample_token_prices):
     # Initial: 50% stablecoin, 50% volatile (20000 each)
     # New target: 60% stablecoin, 40% volatile
     new_allocation = 0.6
+    swap_fee_rate = 0.01  # 1% fee
+
+    # Calculate expected values
+    total_value = 40000
+    target_stablecoin = total_value * new_allocation  # 24000
+    swap_volume = abs(
+        target_stablecoin - sample_portfolio["stablecoin"]["quantity"]
+    )  # 4000
+    swap_fee = swap_volume * swap_fee_rate  # 40
+    actual_stablecoin = target_stablecoin  # Keep original target
+    actual_volatile = (
+        total_value - actual_stablecoin - swap_fee
+    )  # 40000 - 24000 - 40 = 15960
+    scaling_factor = actual_volatile / 20000  # 15960 / 20000 = 0.798
 
     # Capture stdout to check the output
     with patch("sys.stdout", new=io.StringIO()):
         rebalanced = rebalance_stablecoin_allocation(
-            sample_portfolio, new_allocation, sample_token_prices
+            sample_portfolio,
+            new_allocation,
+            sample_token_prices,
+            swap_fee_rate=swap_fee_rate,
         )
 
-    # Total portfolio value: 40000
-    # New stablecoin value: 40000 * 0.6 = 24000
-    assert rebalanced["stablecoin"]["quantity"] == 24000
-    assert rebalanced["stablecoin"]["target_allocation"] == 0.6
-    assert rebalanced["volatile_allocation"] == 0.4
+    # Check stablecoin values
+    assert rebalanced[0]["stablecoin"]["quantity"] == actual_stablecoin
+    assert rebalanced[0]["stablecoin"]["target_allocation"] == 0.6
+    assert rebalanced[0]["volatile_allocation"] == 0.4
 
-    # New volatile value: 40000 * 0.4 = 16000
-    # Scaling factor: 16000 / 20000 = 0.8
-    scaling_factor = 0.8
+    # Check new quantities (scaled by 0.798)
+    assert rebalanced[0]["tokens"]["btc"]["quantity"] == 0.5 * scaling_factor
+    assert rebalanced[0]["tokens"]["eth"]["quantity"] == 5.0 * scaling_factor
+    assert rebalanced[0]["tokens"]["sol"]["quantity"] == 100.0 * scaling_factor
 
-    # Check new quantities (scaled by 0.8)
-    assert rebalanced["tokens"]["btc"]["quantity"] == 0.5 * scaling_factor
-    assert rebalanced["tokens"]["eth"]["quantity"] == 5.0 * scaling_factor
-    assert rebalanced["tokens"]["sol"]["quantity"] == 100.0 * scaling_factor
+    # Check total fees paid
+    assert rebalanced[1] == swap_fee
 
 
 def test_process_fear_greed_rebalancing_extreme_fear(
@@ -368,7 +416,7 @@ def test_process_fear_greed_rebalancing_extreme_fear(
         )
 
     # Should reduce stablecoin by 10%
-    assert result is True
+    assert result == (True, 40.0)
     assert sample_portfolio["stablecoin"]["target_allocation"] == 0.4  # from 0.5
 
 
@@ -387,7 +435,7 @@ def test_process_fear_greed_rebalancing_extreme_greed(
         )
 
     # Should increase stablecoin by 10%
-    assert result is True
+    assert result == (True, 40.0)
     assert sample_portfolio["stablecoin"]["target_allocation"] == 0.6  # from 0.5
 
 
@@ -402,7 +450,7 @@ def test_process_fear_greed_rebalancing_neutral(sample_portfolio, sample_token_p
         sample_portfolio, neutral_data, sample_token_prices, timestamp
     )
 
-    assert result is False
+    assert result == (False, 0.0)
     assert sample_portfolio["stablecoin"]["target_allocation"] == 0.5  # unchanged
 
 

@@ -495,10 +495,8 @@ def rebalance_portfolio_tokens(
                 effective_target_usd = target_usd - swap_fee
                 new_quantity = effective_target_usd / token_prices[token]
                 data["quantity"] = new_quantity
-
                 # Update current volatile value to account for this swap's fee
                 current_volatile_value -= swap_fee
-
     # Log fee information
     if total_fees > 0:
         print(
