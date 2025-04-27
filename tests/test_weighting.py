@@ -12,7 +12,7 @@ from core.weighting import (
     calculate_index_weights,
     calculate_weight_market_cap,
     calculate_weight_sqrt_market_cap,
-    display_initial_weights,
+    display_portfolio_weights,
     normalize_weights,
     print_portfolio_weights,
 )
@@ -159,12 +159,12 @@ def test_print_portfolio_weights(sample_weights):
         assert btc_pos < eth_pos < sol_pos
 
 
-def test_display_initial_weights(sample_historical_data):
+def test_display_portfolio_weights(sample_historical_data):
     """Test displaying initial weights for different methods."""
     methods = ["market_cap", "sqrt_market_cap"]
 
     with patch("core.weighting.print_portfolio_weights") as mock_print:
-        display_initial_weights(sample_historical_data, methods)
+        display_portfolio_weights(sample_historical_data, methods)
 
         # Should be called once for each method
         assert mock_print.call_count == 2
@@ -190,19 +190,19 @@ def test_display_initial_weights(sample_historical_data):
         )
 
 
-def test_display_initial_weights_empty_data():
+def test_display_portfolio_weights_empty_data():
     """Test displaying weights with empty data."""
     methods = ["market_cap"]
 
     with patch("builtins.print") as mock_print:
-        display_initial_weights({}, methods)
+        display_portfolio_weights({}, methods)
 
         # Should print an error message
         mock_print.assert_called_with("No data available to calculate weights")
 
 
-def test_display_initial_weights_with_timestamps():
-    """Test that display_initial_weights uses the earliest timestamp."""
+def test_display_portfolio_weights_with_timestamps():
+    """Test that display_portfolio_weights uses the earliest timestamp."""
     # Create data with different timestamps
     timestamp1 = 1609459200000  # 2021-01-01
     timestamp2 = 1609545600000  # 2021-01-02
@@ -224,7 +224,7 @@ def test_display_initial_weights_with_timestamps():
         mock_calculate.return_value = {"btc": 0.8, "eth": 0.2}
 
         with patch("core.weighting.print_portfolio_weights"):
-            display_initial_weights(data, methods)
+            display_portfolio_weights(data, methods)
 
             # Should use market caps from the earlier timestamp (timestamp1)
             expected_market_caps = {"btc": 600000000000, "eth": 100000000000}

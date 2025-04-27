@@ -371,7 +371,7 @@ def test_load_and_prepare_data(
 
 
 @patch("main.load_and_prepare_data")
-@patch("main.display_initial_weights")
+@patch("main.display_portfolio_weights")
 @patch("main.process_benchmark_data")
 @patch("main.print_benchmark_metrics")
 @patch("main.calculate_strategy_performance")
@@ -433,7 +433,7 @@ def test_run_performance_analysis(
 
 
 @patch("main.load_and_prepare_data")
-@patch("main.display_initial_weights")
+@patch("main.display_portfolio_weights")
 @patch("main.process_benchmark_data")
 @patch("main.print_benchmark_metrics")
 @patch("main.calculate_strategy_performance")
@@ -475,3 +475,20 @@ def test_run_performance_analysis_failure(
     result = run_performance_analysis(generate_plots=False)
 
     assert not mock_generate_plots.called
+
+
+@patch("core.weighting.display_portfolio_weights")
+def test_run_performance_analysis_with_data(
+    mock_display_weights,
+    sample_historical_data,
+    sample_fear_greed_data,
+):
+    """Test running performance analysis with sample data."""
+    # Set up the test data
+    methods = ["market_cap", "sqrt_market_cap"]
+
+    # Call the function through the mock
+    mock_display_weights(sample_historical_data, methods)
+
+    # Verify the function was called with correct arguments
+    mock_display_weights.assert_called_once_with(sample_historical_data, methods)

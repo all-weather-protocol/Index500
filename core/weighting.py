@@ -64,15 +64,16 @@ def print_portfolio_weights(weights):
     print("")  # Empty line for separation
 
 
-def display_initial_weights(historical_data, methods):
+def display_portfolio_weights(historical_data, methods, timestamp_type="initial"):
     """
-    Calculate and display the initial portfolio weights for each method.
+    Calculate and display portfolio weights for each method at a specific timestamp.
 
     Args:
         historical_data (dict): Dictionary of historical price data
         methods (list): List of weighting methods to analyze
+        timestamp_type (str): Either "initial" or "final" to determine which timestamp to use
     """
-    # Find the earliest timestamp in the data
+    # Find the relevant timestamp in the data
     timestamps = []
     for token_data in historical_data.values():
         timestamps.extend(ts for ts, _, _ in token_data)
@@ -81,18 +82,22 @@ def display_initial_weights(historical_data, methods):
         print("No data available to calculate weights")
         return
 
-    first_timestamp = min(timestamps)
+    target_timestamp = (
+        min(timestamps) if timestamp_type == "initial" else max(timestamps)
+    )
 
-    # Extract market caps at the earliest timestamp
+    # Extract market caps at the target timestamp
     market_caps = {}
     for token, data in historical_data.items():
         for ts, _, mcap in data:
-            if ts == first_timestamp:
+            if ts == target_timestamp:
                 market_caps[token] = mcap
                 break
 
     # Calculate and display weights for each method
     for method in methods:
-        print(f"\nInitial weights for {method.replace('_', ' ').title()}:")
+        print(
+            f"\n{timestamp_type.title()} weights for {method.replace('_', ' ').title()}:"
+        )
         weights = calculate_index_weights(market_caps, method)
         print_portfolio_weights(weights)

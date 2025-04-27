@@ -33,7 +33,7 @@ from core.strategy import (
 )
 
 # Import from weighting module
-from core.weighting import display_initial_weights
+from core.weighting import display_portfolio_weights
 
 
 def run_performance_analysis(
@@ -76,7 +76,7 @@ def run_performance_analysis(
         return {"error": "No data available"}
 
     # Display initial portfolio weights
-    display_initial_weights(historical_data, methods)
+    display_portfolio_weights(historical_data, methods, "initial")
 
     # Initialize result dictionaries
     all_index_prices = {}
@@ -166,6 +166,9 @@ def run_performance_analysis(
     # Generate plots if requested
     if generate_plots:
         generate_performance_plots(all_performance_data, start_date)
+
+    # Display final portfolio weights
+    display_portfolio_weights(historical_data, methods, "final")
 
     # Prepare result dictionary
     result = {
