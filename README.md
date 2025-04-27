@@ -13,4 +13,5 @@ A web3 index fund
 
 ## Performance
 
-![performace](detailed_strategy_comparison_20210302.png)
+![performace](pics/performance_only_strategy_comparison_20210308.png)
+![metics](pics/metrics_only_strategy_comparison_20210308.png)
