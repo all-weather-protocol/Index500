@@ -1,80 +1,116 @@
-import numpy as np
+import math
 
 
-def calculate_age_risk(protocol_ages):
-    """Calculate risk score based on protocol age using relative values"""
-    # Convert to numpy array for vectorized operations
-    ages = np.array(protocol_ages)
-    # Normalize to 0-1 range where 1 is highest risk (newest protocol)
-    max_age = np.max(ages)
-    return 1 - (ages / max_age)
+# Calculate the security score for a single protocol layer
+# Higher TVL and age → higher security score
+def security_score(tvl_million, age_days):
+    return math.log(tvl_million + 10) * math.log(age_days + 10)
 
 
-def calculate_tvl_risk(tvls):
-    """Calculate risk score based on TVL using relative values"""
-    # Convert to numpy array for vectorized operations
-    tvl_values = np.array(tvls)
-    # Normalize to 0-1 range where 1 is highest risk (lowest TVL)
-    max_tvl = np.max(tvl_values)
-    return 1 - (tvl_values / max_tvl)
+# Harmonic mean of security scores
+# This gives more weight to weak layers, and prevents a strong one from masking risk:
+def effective_risk(layers):
+    n = len(layers)
+    harmonic_mean = n / sum(
+        1 / security_score(layer["tvl"], layer["age"]) for layer in layers
+    )
+    return 1 / harmonic_mean
 
 
-def calculate_volatility_from_risk(risk_score):
-    """Convert risk score to volatility using a linear scale"""
-    # Map risk scores to volatility range of 4% to 20%
-    return 0.04 + (risk_score * 0.16)
+# Calculate allocation score using a simplified Kelly-style logic
+# Higher APR and lower risk → higher allocation score
+def alloc_score(apr, risk):
+    return math.log(apr + 1) / risk
 
 
-def kelly_allocation(expected_returns, protocol_ages, tvls, pool_names=None, rf=0.0):
-    """
-    Calculate Kelly-optimal allocation weights for multiple stablecoin pools using protocol age and TVL for risk assessment.
+# Main function: input list of assets, output allocation plan
+def calculate_allocations(assets):
+    scores = []
+    for asset in assets:
+        risk = effective_risk(asset["layers"])
+        score = alloc_score(asset["apr"], risk)
+        scores.append(
+            {"name": asset["name"], "apr": asset["apr"], "risk": risk, "score": score}
+        )
 
-    Parameters:
-    - expected_returns: list or np.array of expected APY for each pool
-    - protocol_ages: list of protocol ages in months
-    - tvls: list of TVL values in USD
-    - pool_names: list of pool names — optional
-    - rf: risk-free rate, default is 0
+    # Normalize all scores to get allocation percentages
+    total_score = sum(item["score"] for item in scores)
+    for item in scores:
+        item["allocation_pct"] = item["score"] / total_score * 100
 
-    Returns:
-    - Dictionary of pool_name -> weight (as percentage)
-    """
-    expected_returns = np.array(expected_returns)
-    if pool_names is None:
-        pool_names = [f"Pool_{i+1}" for i in range(len(expected_returns))]
-
-    # Calculate risk scores and convert to volatility
-    age_risks = calculate_age_risk(protocol_ages)
-    tvl_risks = calculate_tvl_risk(tvls)
-
-    # Combine risks (40% age, 60% TVL weight)
-    combined_risks = (age_risks * 0.4) + (tvl_risks * 0.6)
-    volatilities = calculate_volatility_from_risk(combined_risks)
-
-    # Covariance matrix assuming independence (diagonal only)
-    cov_matrix = np.diag(volatilities**2)
-    excess_return = expected_returns - rf
-
-    # Kelly formula
-    inv_cov = np.linalg.inv(cov_matrix)
-    raw_weights = inv_cov.dot(excess_return)
-    norm_weights = raw_weights / raw_weights.sum()  # Normalize to sum to 1
-
-    # Format result
-    return {
-        name: round(weight * 100, 2) for name, weight in zip(pool_names, norm_weights)
-    }
+    return scores
 
 
-# Example usage
-expected_returns = [0.5, 0.11, 0.138]  # Expected APYs
-protocol_ages = [36, 34, 41]  # Protocol ages in months
-tvls = [339, 1010, 27]  # TVL in M USD
-pool_names = ["aster", "aerodrome", "gains"]
+# ✅ Example: PT-wstETH (Pendle + Lido), wstETH, stables on Aave
+# assets = [
+#     {
+#         "name": "PT-eeth@Pendle",
+#         "apr": 4.19,
+#         "layers": [
+#             { "name": "Pendle", "tvl": 4700, "age": 4 },
+#             { "name": "Etherfi",   "tvl": 6400, "age": 2 }
+#         ]
+#     },
+#     {
+#         "name": "PT-wsteth@Pendle",
+#         "apr": 2.86,
+#         "layers": [
+#             { "name": "Pendle", "tvl": 4700, "age": 4 },
+#             { "name": "Lido", "tvl": 23000, "age": 5 }
+#         ]
+#     },
+#     # {
+#     #     "name": "wstETH@Lido",
+#     #     "apr": 2.86,
+#     #     "layers": [
+#     #         { "name": "Lido", "tvl": 23000, "age": 5 }
+#     #     ]
+#     # },
+#     {
+#         "name": "eth@aave",
+#         "apr": 2.05,
+#         "layers": [
+#             { "name": "Aave", "tvl": 24000, "age": 5 }
+#         ]
+#     },
+#     {
+#         "name": "mseth@aerodrome",
+#         "apr": 4.51,
+#         "layers": [
+#             { "name": "Aerodrome", "tvl": 251, "age": 2 },
+#             { "name": "Metronome Synth", "tvl": 976, "age": 2 }
+#         ]
+#     }
+# ]
+assets = [
+    {
+        "name": "ousdt",
+        "apr": 9.37,
+        "layers": [{"name": "openusdt", "tvl": 2, "age": 0.2}],
+    },
+    {"name": "aster", "apr": 25, "layers": [{"name": "bold", "tvl": 348, "age": 3}]},
+    {"name": "bold", "apr": 14, "layers": [{"name": "bold", "tvl": 315, "age": 4}]},
+    {
+        "name": "gusdc",
+        "apr": 9.21,
+        "layers": [{"name": "gains", "tvl": 28.33, "age": 3}],
+    },
+    {
+        "name": "msusd",
+        "apr": 8.81,
+        "layers": [{"name": "gains", "tvl": 20.23, "age": 2}],
+    },
+    {"name": "susd", "apr": 9.21, "layers": [{"name": "synx", "tvl": 97.23, "age": 7}]},
+]
 
-weights = kelly_allocation(expected_returns, protocol_ages, tvls, pool_names)
-print("\nKelly Optimal Allocation Weights:")
-print("-" * 30)
-for pool, weight in weights.items():
-    print(f"{pool}: {weight:.2f}%")
-print("-" * 30)
+# ✅ Run the calculation and print the result
+results = calculate_allocations(assets)
+# Sort by allocation percentage in descending order
+results_sorted = sorted(results, key=lambda x: x["allocation_pct"], reverse=True)
+for r in results_sorted:
+    print(f"{r['name']}:")
+    print(f"  APR: {r['apr']*100:.2f}%")
+    print(f"  Effective Risk: {r['risk']:.6f}")
+    print(f"  Score: {r['score']:.4f}")
+    print(f"  Suggested Allocation: {r['allocation_pct']:.2f}%")
+    print()
